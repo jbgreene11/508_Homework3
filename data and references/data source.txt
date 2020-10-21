@@ -5,3 +5,23 @@ https://data.cityofchicago.org/resource/bp3e-nw4d.json
 311 Service Requests - Tree Debris - Historical
 https://data.cityofchicago.org/Service-Requests/311-Service-Requests-Tree-Debris-Historical/mab8-y9h3
 https://data.cityofchicago.org/resource/mab8-y9h3.json
+
+311 Service Requests - Garbage Carts - No Duplicates
+https://data.cityofchicago.org/Service-Requests/311-Service-Requests-Garbage-Carts-No-Duplicates/cry7-g5xt
+https://data.cityofchicago.org/resource/cry7-g5xt.json
+
+Chicage Parking Meters
+https://github.com/stevevance/Chicago-Parking-Meters
+
+
+Cooling Centers
+https://data.cityofchicago.org/Health-Human-Services/Cooling-Centers/msrk-w9ih
+https://data.cityofchicago.org/resource/msrk-w9ih.json
+
+Building Violations
+https://data.cityofchicago.org/Buildings/Building-Violations/22u3-xenr
+https://data.cityofchicago.org/resource/22u3-xenr.json
+
+Affordable Rental Housing Developments
+https://data.cityofchicago.org/Community-Economic-Development/Affordable-Rental-Housing-Developments/s6ha-ppgi
+https://data.cityofchicago.org/resource/s6ha-ppgi.json
