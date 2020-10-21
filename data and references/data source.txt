@@ -1,0 +1,7 @@
+311 Service Requests - Pot Holes Reported - No Duplicates
+https://data.cityofchicago.org/Service-Requests/311-Service-Requests-Pot-Holes-Reported-No-Duplica/bp3e-nw4d
+https://data.cityofchicago.org/resource/bp3e-nw4d.json
+
+311 Service Requests - Tree Debris - Historical
+https://data.cityofchicago.org/Service-Requests/311-Service-Requests-Tree-Debris-Historical/mab8-y9h3
+https://data.cityofchicago.org/resource/mab8-y9h3.json

@@ -5,7 +5,6 @@ date: "10/20/2020"
 output: html_document
 ---
 
-
 ### Setup
 
 ```{r setup, include=FALSE}
@@ -70,7 +69,7 @@ chicagoBoundary <-
 Plotting point data and density- Points to Polygons
 
 ```{r fig.width=6, fig.height=4}
-# uses grid.arrange to organize indpendent plots
+# uses grid.arrange to organize independent plots
 grid.arrange(ncol=2,
 ggplot() + 
   geom_sf(data = chicagoBoundary) +
@@ -92,7 +91,6 @@ ggplot() +
 ### Creating a fishnet grid
 
 A Fishnet is a grid where every polygon is connected on all sides by polygon neighbors continuously. We can define for every polygon what its neighbors are. Allows us to run analytics.
-
 
 The `{sf}` package offers really easy way to create fishnet grids.
 
@@ -120,7 +118,7 @@ crime_net <-
   aggregate(., fishnet, sum) %>%
   mutate(countmvtheft = replace_na(countmvtheft, 0),
          uniqueID = rownames(.),
-         cvID = sample(round(nrow(fishnet) / 24), 
+         cvID = sample(round(nrow(fishnet) / 24),                                #why 24?
                        size=nrow(fishnet), replace = TRUE))
 
 ggplot() +
@@ -134,6 +132,7 @@ ggplot() +
 # yy <- mapview::mapview(mutate(burglaries, ID = seq(1:n())))
 # xx + yy
 ```
+
 ### Modeling Spatial Features
 
 ```{r}
@@ -216,6 +215,77 @@ neighborhoods <-
 
 ```
 
+Adding in additiional features
+- From an article, it says rental places are more likely to have MTV
+the only data that can be obtained here is 'Affordable Rental Housing Developments', but this does not include all  rental units in the city
+- Other datasets provided for 311 reports: tree debris, garbage cart, pot holes
+- other retail? 
+
+```{r}
+retail.all <- read.socrata("https://data.cityofchicago.org/resource/nrmj-3kcf.json")
+
+traffic <-
+  read.socrata("https://data.cityofchicago.org/resource/pfsx-4n4m.json") %>% 
+  dplyr::select(Y = latitude, X = longitude,total_passing_vehicle_volume) %>%
+    na.omit() %>%
+    st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
+    st_transform(st_crs(fishnet)) %>%
+    mutate(Legend = "traffic_count")
+
+parking_meters <- 
+  st_read('D:/Rdata/508_Homework3/data and references/chicagoparkingmeters.geojson') %>% 
+  dplyr::select(geometry) %>% 
+  st_transform(st_crs(fishnet)) %>%
+  mutate(Legend = "parking_meters")
+
+# this is a really large data set and might not be useful
+garbage_cart <- read.socrata("https://data.cityofchicago.org/resource/cry7-g5xt.json") %>%  
+    dplyr::select(Y = latitude, X = longitude) %>%
+    na.omit() %>%
+    st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
+    st_transform(st_crs(fishnet)) %>%
+    mutate(Legend = "garbage_carts")
+
+```
+
+- try using osm
+
+```{r}
+library(osmdata)
+
+# reference doc: https://dominicroye.github.io/en/2018/accessing-openstreetmap-data-with-r/
+
+# see what can filter
+# available_features()
+# available_tags('amenity')
+
+
+# parking lots (single points)
+parking <- getbb('Chicago') %>% 
+  opq() %>% 
+  add_osm_feature('amenity','parking') %>% 
+  osmdata_sf()
+parking <- parking$osm_points %>% 
+  dplyr::select(geometry) %>% 
+  st_transform(st_crs(fishnet)) %>%
+  st_intersection(.,chicagoBoundary) %>% 
+  dplyr::select(geometry) %>% 
+  mutate(Legend = "parking")
+
+# supermarkets (points)
+supermarkets <- getbb('Chicago') %>% 
+  opq() %>% 
+  add_osm_feature('building','supermarket') %>% 
+  osmdata_sf() 
+supermarkets <- supermarkets$osm_points %>% 
+  dplyr::select(geometry)%>% 
+  st_transform(st_crs(fishnet)) %>%
+  st_intersection(.,chicagoBoundary) %>% 
+  dplyr::select(geometry) %>% 
+  mutate(Legend = "supermarkets")
+
+```
+
 ### Aggregating Features to Fishnet
 
 ```{r}
@@ -233,10 +303,28 @@ vars_net <-
     na.omit() %>%
     ungroup()
 
+traffic_net <- traffic %>% 
+  st_join(., fishnet, join=st_within) %>%
+  st_drop_geometry() %>%
+  group_by(uniqueID, Legend) %>%
+  summarize(count = sum(traffic$traffic_count)) %>%
+    full_join(fishnet) %>%
+    spread(Legend, count, fill=0) %>%
+    st_sf() %>%
+    dplyr::select(-`<NA>`) %>%
+    na.omit() %>%
+    ungroup()
+
+#failed to aggregate
+traffic_net <- 
+  aggregate(traffic, fishnet, sum) %>%
+  mutate(counttraffic = replace_na(counttraffic, 0))
+ 
 
 ```
 
 ### Map Risk Factors
+
 ```{r}
 vars_net.long <- 
   gather(vars_net, Variable, value, -geometry, -uniqueID)
@@ -256,7 +344,8 @@ do.call(grid.arrange,c(mapList, ncol =3, top = "Risk Factors by Fishnet"))
 
 ```
 
-### Feature ENgineering - Nearest Neighbor Function
+### Feature Engineering - Nearest Neighbor Function
+
 ```{r}
 nn_function <- function(measureFrom,measureTo,k) {
   measureFrom_Matrix <-
@@ -320,6 +409,7 @@ do.call(grid.arrange,c(mapList, ncol = 3, top = "Nearest Neighbor risk Factors b
 ```
 
 ### Feature Engineering - Distance to a Point
+
 ```{r}
 
 loopPoint <-
@@ -333,7 +423,7 @@ vars_net$loopDistance =
 
 ```
 
-### 5.3.3. Feature Engineering - Create the final_net
+### 5.3.3. Feature Engineering - Create the final\_net
 
 ```{r}
 final_net <-
@@ -349,7 +439,9 @@ final_net <-
   na.omit()
 
 ```
+
 ### 5.4 Spatial Process of Auto Theft
+
 ```{r}
 #Visualize local spatial process of auto Theft
 
@@ -391,7 +483,8 @@ do.call(grid.arrange,c(varList, ncol = 4, top = "Local Morans I statistics, MV T
 
 ```
 
-View Local Moran's / feature in final_net for multiple P values
+View Local Moran's / feature in final\_net for multiple P values
+
 ```{r}
 final_net <-
   final_net %>% 
@@ -409,6 +502,7 @@ final_net <-
 ### 5.4.1. Correlation Tests
 
 Organize nearest Neighbor correlations side by side
+
 ```{r}
 correlation.long <-
   st_drop_geometry(final_net) %>%
@@ -432,6 +526,7 @@ ggplot(correlation.long, aes(Value, countmvtheft)) +
 ```
 
 ### 5.5 Poisson Regression
+
 ```{r}
 reg.vars <- c("Abandoned_Buildings.nn", "Abandoned_Cars.nn", "Graffiti.nn", 
               "Liquor_Retail.nn", "Street_Lights_Out.nn", "Sanitation.nn", 
@@ -479,6 +574,7 @@ for (i in cvID_list) {
 ```
 
 The result is a sf layer with observed and predicted theft counts
+
 ```{r}
 reg.cv <- crossValidate(
   dataset = final_net,
@@ -510,8 +606,8 @@ reg.ss.spatialCV <- crossValidate(
 
 ```
 
-###5.5.2 Accuracy & Generalzability
-Create Reg.summary binding together observed & Predicted counts and errors for each grid cell for each regression with the CVID and geometry.
+\#\#\#5.5.2 Accuracy & Generalzability Create Reg.summary binding together observed & Predicted counts and errors for each grid cell for each regression with the CVID and geometry.
+
 ```{r}
 reg.summary <- 
   rbind(
@@ -554,6 +650,7 @@ error_by_reg_and_fold %>%
 ```
 
 Create table of mean and standard deviation in errors
+
 ```{r}
 st_drop_geometry(error_by_reg_and_fold) %>%
   group_by(Regression) %>% 
@@ -569,6 +666,7 @@ st_drop_geometry(error_by_reg_and_fold) %>%
 ```
 
 Map Visualizing where the higher errors occur
+
 ```{r}
 error_by_reg_and_fold %>%
   filter(str_detect(Regression, "LOGO")) %>%
@@ -620,9 +718,10 @@ st_drop_geometry(reg.summary) %>%
 
 ```
 
-###5.5.3 Generalizability by neighborhood context
+\#\#\#5.5.3 Generalizability by neighborhood context
 
 Test if the model generalizes accross different neighborhood contexts
+
 ```{r}
 tracts18 <- 
   get_acs(geography = "tract", variables = c("B01001_001E","B01001A_001E"), 
@@ -640,6 +739,7 @@ tracts18 <-
 ```
 
 Usefulness judged relative to an alternative polics allocation method
+
 ```{r}
 reg.summary %>% 
   filter(str_detect(Regression, "LOGO")) %>%
@@ -659,6 +759,7 @@ reg.summary %>%
 ### 5.5.4 Does this model allocate better than traditional Crime hotspots?
 
 Create Kernel density map
+
 ```{r}
 burg_ppp <- as.ppp(st_coordinates(mvtheft), W = st_bbox(final_net))
 burg_KD <- spatstat::density.ppp(mvtheft_ppp, 1000)
@@ -739,6 +840,7 @@ mvtheft_risk_sf <-
 ```
 
 Generate map of risk categories with mvtheft18 overlaid.
+
 ```{r}
 rbind(mvtheft_KDE_sf, mvtheft_risk_sf) %>%
   na.omit() %>%
@@ -755,7 +857,8 @@ rbind(mvtheft_KDE_sf, mvtheft_risk_sf) %>%
 
 ```
 
-Calculate rate of 2018 Theft points by risk category and model type. 
+Calculate rate of 2018 Theft points by risk category and model type.
+
 ```{r}
 rbind(mvtheft_KDE_sf, mvtheft_risk_sf) %>%
   st_set_geometry(NULL) %>% na.omit() %>%
