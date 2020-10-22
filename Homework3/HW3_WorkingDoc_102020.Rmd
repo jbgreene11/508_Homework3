@@ -238,6 +238,13 @@ parking_meters <-
   st_transform(st_crs(fishnet)) %>%
   mutate(Legend = "parking_meters")
 
+#parking meters for Jay
+parking_meters <- 
+  st_read('C:/Users/green/OneDrive/Desktop/chicagoparkingmeters.geojson') %>% 
+  dplyr::select(geometry) %>% 
+  st_transform(st_crs(fishnet)) %>%
+  mutate(Legend = "parking_meters")
+
 # this is a really large data set and might not be useful
 garbage_cart <- read.socrata("https://data.cityofchicago.org/resource/cry7-g5xt.json") %>%  
     dplyr::select(Y = latitude, X = longitude) %>%
@@ -284,6 +291,35 @@ supermarkets <- supermarkets$osm_points %>%
   dplyr::select(geometry) %>% 
   mutate(Legend = "supermarkets")
 
+#car dealership
+car_shop <- getbb('Chicago') %>% 
+  opq() %>% 
+  add_osm_feature('shop','car') %>% 
+  osmdata_sf() 
+car_shop <- car_shop$osm_points %>% 
+  dplyr::select(geometry)%>% 
+  st_transform(st_crs(fishnet)) %>%
+  st_intersection(.,chicagoBoundary) %>% 
+  dplyr::select(geometry) %>% 
+  mutate(Legend = "car_shops")
+
+#car Repair
+car_repair <- getbb('Chicago') %>% 
+  opq() %>% 
+  add_osm_feature('shop','car_repair') %>% 
+  osmdata_sf() 
+car_repair <- car_repair$osm_points %>% 
+  dplyr::select(geometry)%>% 
+  st_transform(st_crs(fishnet)) %>%
+  st_intersection(.,chicagoBoundary) %>% 
+  dplyr::select(geometry) %>% 
+  mutate(Legend = "car_repair")
+
+
+
+
+
+
 ```
 
 ### Aggregating Features to Fishnet
@@ -291,7 +327,7 @@ supermarkets <- supermarkets$osm_points %>%
 ```{r}
 vars_net <- 
   rbind(abandonCars,streetLightsOut,abandonBuildings,
-        liquorRetail, graffiti, sanitation) %>%
+        liquorRetail, graffiti, sanitation, parking, parking_meters, garbage_cart, supermarkets, car_shop, car_repair ) %>%
   st_join(., fishnet, join=st_within) %>%
   st_drop_geometry() %>%
   group_by(uniqueID, Legend) %>%
@@ -371,21 +407,58 @@ nn_function <- function(measureFrom,measureTo,k) {
 st_c <- st_coordinates
 st_coid <- st_centroid
 
+library(stringr)
+
+test <- data.frame(st_coordinates(parking_meters))
+test2 <- data.frame(st_coordinates(parking_meters)) %>%
+  na.omit()
+
+
+#omit NA values from New features and take ST_coordinates
+parking_meters.c <- data.frame(st_coordinates(parking_meters)) %>%
+                                 na.omit()
+garbage_cart.c <- data.frame(st_coordinates(garbage_cart)) %>%
+                                 na.omit() 
+parking.c <- data.frame(st_coordinates(parking)) %>%
+                                 na.omit()
+supermarkets.c <- data.frame(st_coordinates(supermarkets)) %>%
+                                 na.omit()
+car_shop.c <- data.frame(st_coordinates(car_shop)) %>%
+                                 na.omit()
+car_repair.c <- data.frame(st_coordinates(car_repair)) %>%
+                                 na.omit()
+                               
+```
+
+
+```{r}                               
 vars_net <-
   vars_net %>%
     mutate(
       Abandoned_Buildings.nn =
-        nn_function(st_c(st_coid(vars_net)), st_c(abandonBuildings),3),
+        nn_function(st_coordinates(st_centroid(vars_net)), st_c(abandonBuildings),3),
       Abandoned_Cars.nn =
-        nn_function(st_c(st_coid(vars_net)), st_c(abandonCars),3),
+        nn_function(st_coordinates(st_centroid(vars_net)), st_c(abandonCars),3),
       Graffiti.nn =
-        nn_function(st_c(st_coid(vars_net)), st_c(graffiti),3),
+        nn_function(st_coordinates(st_centroid(vars_net)), st_c(graffiti),3),
       Liquor_Retail.nn =
-        nn_function(st_c(st_coid(vars_net)), st_c(liquorRetail),3),
+        nn_function(st_coordinates(st_centroid(vars_net)), st_c(liquorRetail),3),
       Street_Lights_Out.nn =
-        nn_function(st_c(st_coid(vars_net)), st_c(streetLightsOut),3),
+        nn_function(st_coordinates(st_centroid(vars_net)), st_c(streetLightsOut),3),
       Sanitation.nn =
-        nn_function(st_c(st_coid(vars_net)), st_c(sanitation),3))
+        nn_function(st_coordinates(st_centroid(vars_net)), st_c(sanitation),3),
+      Parking_meters.nn =
+        nn_function(st_coordinates(st_centroid(vars_net)), parking_meters.c,3),
+      Garbage_cart.nn =
+        nn_function(st_c(st_coid(vars_net)), garbage_cart.c,3),
+      Parking.nn =
+        nn_function(st_c(st_coid(vars_net)), parking.c,3),
+      Supermarkets.nn =
+        nn_function(st_c(st_coid(vars_net)), supermarkets.c,3),
+      Car_shop.nn =
+        nn_function(st_c(st_coid(vars_net)), car_shop.c,3),
+      Car_repair.nn =
+        nn_function(st_c(st_coid(vars_net)), car_repair.c,3))
 
 #Plot Nearest Neighbor
 
@@ -451,7 +524,7 @@ final_net.weights <- nb2listw(final_net.nb, style="W", zero.policy=TRUE)
 
 ```
 
-Create Visual Maps of Indicators
+Create Visual Maps of Indicators - local spatial process of auto theft
 
 ```{r}
 #Visualize local spatial process of auto Theft
@@ -486,6 +559,16 @@ do.call(grid.arrange,c(varList, ncol = 4, top = "Local Morans I statistics, MV T
 View Local Moran's / feature in final\_net for multiple P values
 
 ```{r}
+#IM UNSURE IF WE NEED THIS FOR THE FINAL WRITE UP, image shown in book section 5.4
+
+
+
+
+
+
+```
+
+```{r}
 final_net <-
   final_net %>% 
   mutate(mvtheft.isSig = 
@@ -495,6 +578,14 @@ final_net <-
            nn_function(st_coordinates(st_centroid(final_net)),
                        st_coordinates(st_centroid(
                          filter(final_net, mvtheft.isSig == 1))), 1))
+
+#plot distance to significant MV theft hotspots
+
+ggplot() +
+  geom_sf(data = final_net, aes(fill = mvtheft.isSig.dist), color = NA) +
+  scale_fill_viridis() +
+  labs(title = "Distance to highly significant local MV theft hotspots") +
+  mapTheme()
 
 
 ```
@@ -527,16 +618,33 @@ ggplot(correlation.long, aes(Value, countmvtheft)) +
 
 ### 5.5 Poisson Regression
 
+
+Histogram of MV Theft Disribution and Poisson Distribution  - Shown in book, do we need for the final assignment?
+```{r}
+
+
+```
+
+Baseline Regression
+```{r}
+
+#ADD BASELINE REGRESSION BACK INTO HERE
+```
+
+
+Updated Regression
+
 ```{r}
 reg.vars <- c("Abandoned_Buildings.nn", "Abandoned_Cars.nn", "Graffiti.nn", 
-              "Liquor_Retail.nn", "Street_Lights_Out.nn", "Sanitation.nn", 
+              "Liquor_Retail.nn", "Street_Lights_Out.nn", "Sanitation.nn", "Parking_meters.nn", "Garbage_cart.nn", 
+              "Parking.nn", "Supermarkets.nn", "Car_shop.nn", "Car_repair.nn", 
               "loopDistance")
 
+#book says we can add neighborhood name and police district to this
 reg.ss.vars <- c("Abandoned_Buildings.nn", "Abandoned_Cars.nn", "Graffiti.nn", 
-                 "Liquor_Retail.nn", "Street_Lights_Out.nn", "Sanitation.nn", 
+              "Liquor_Retail.nn", "Street_Lights_Out.nn", "Sanitation.nn", "Parking_meters.nn", "Garbage_cart.nn", 
+              "Parking.nn", "Supermarkets.nn", "Car_shop.nn", "Car_repair.nn", 
                  "loopDistance", "mvtheft.isSig", "mvtheft.isSig.dist")
-
-
 
 ```
 
@@ -557,7 +665,7 @@ for (i in cvID_list) {
                 dplyr::select(id, geometry, indVariables, dependentVariable)
   
   regression <-
-    glm(countBurglaries ~ ., family = "poisson", 
+    glm(countmvtheft ~ ., family = "poisson", 
       data = fold.train %>% 
       dplyr::select(-geometry, -id))
   
@@ -611,16 +719,16 @@ reg.ss.spatialCV <- crossValidate(
 ```{r}
 reg.summary <- 
   rbind(
-    mutate(reg.cv,           Error = Prediction - countBurglaries,
+    mutate(reg.cv,           Error = Prediction - countmvtheft,
                              Regression = "Random k-fold CV: Just Risk Factors"),
                              
-    mutate(reg.ss.cv,        Error = Prediction - countBurglaries,
+    mutate(reg.ss.cv,        Error = Prediction - countmvtheft,
                              Regression = "Random k-fold CV: Spatial Process"),
     
-    mutate(reg.spatialCV,    Error = Prediction - countBurglaries,
+    mutate(reg.spatialCV,    Error = Prediction - countmvtheft,
                              Regression = "Spatial LOGO-CV: Just Risk Factors"),
                              
-    mutate(reg.ss.spatialCV, Error = Prediction - countBurglaries,
+    mutate(reg.ss.spatialCV, Error = Prediction - countmvtheft,
                              Regression = "Spatial LOGO-CV: Spatial Process")) %>%
     st_sf() 
 
@@ -674,7 +782,7 @@ error_by_reg_and_fold %>%
     geom_sf(aes(fill = MAE)) +
     facet_wrap(~Regression) +
     scale_fill_viridis() +
-    labs(title = "Burglary errors by LOGO-CV Regression") +
+    labs(title = "Mvtheft errors by LOGO-CV Regression") +
     mapTheme() + theme(legend.position="bottom")
 
 ```
@@ -761,8 +869,8 @@ reg.summary %>%
 Create Kernel density map
 
 ```{r}
-burg_ppp <- as.ppp(st_coordinates(mvtheft), W = st_bbox(final_net))
-burg_KD <- spatstat::density.ppp(mvtheft_ppp, 1000)
+mvtheft_ppp <- as.ppp(st_coordinates(mvtheft), W = st_bbox(final_net))
+mvtheft_KD <- spatstat::density.ppp(mvtheft_ppp, 1000)
 
 as.data.frame(mvtheft_KD) %>%
   st_as_sf(coords = c("x", "y"), crs = st_crs(final_net)) %>%
@@ -777,8 +885,9 @@ as.data.frame(mvtheft_KD) %>%
 
 ```
 
-Goodness of fit indicator is create to illustrate 2017 kernel density or risk predictions capture more of the 2018 burlgaries.
+Goodness of fit indicator is create to illustrate 2017 kernel density or risk predictions capture more of the 2018 mvtheft.
 
+JG NOTE: RUNNING INTO TROUBLE HERE
 ```{r}
 mvtheft18 <- 
   read.socrata("https://data.cityofchicago.org/Public-Safety/Crimes-2018/3i3m-jwuy") %>% 
@@ -790,16 +899,7 @@ mvtheft18 <-
          Y = as.numeric(Y)) %>% 
   na.omit %>%
   st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
-  st_transform('ESRI:102271') %>% 
-  distinct() %>%
-  .[fishnet,]
-
-mvtheft_ppp <- as.ppp(st_coordinates(mvtheft), W = st_bbox(final_net))
-mvtheft_KD <- spatstat::density.ppp(mvtheft_ppp, 1000)
-
-mvtheft_KDE_sf <- as.data.frame(mvtheft_KD) %>%
-  st_as_sf(coords = c("x", "y"), crs = st_crs(final_net)) %>%
-  aggregate(., final_net, mean) %>%
+  st_I 
   mutate(label = "Kernel Density",
          Risk_Category = ntile(value, 100),
          Risk_Category = case_when(
@@ -811,7 +911,7 @@ mvtheft_KDE_sf <- as.data.frame(mvtheft_KD) %>%
   cbind(
     aggregate(
       dplyr::select(mvtheft18) %>% mutate(mvtheftCount = 1), ., sum) %>%
-    mutate(mvtheftCount = replace_na(mvtheftCount, 0))) %>%
+   mutate(mvtheftCount = replace_na(mvtheftCount, 0))) %>%
   dplyr::select(label, Risk_Category, mvtheftCount)
 
 
